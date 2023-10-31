@@ -138,7 +138,7 @@ namespace WIFIDRIVER
       ptr +="<script>\n";
       ptr +="function ClickWifiName(element) {\n";
       ptr +="var ssid = element.textContent;\n";
-      ptr +="var passwordInput = document.getElementById(\"passwordInput\");\n";
+      ptr +="var password = document.getElementById(\"passwordInput\");\n";
       ptr +="passwordInput.style.display = \"block\";\n";
       ptr +="passwordInput.placeholder = ssid+ \"-password?\";\n";
       // ptr +="passwordInput.onblur = function () {\n";
