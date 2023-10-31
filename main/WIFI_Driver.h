@@ -20,14 +20,19 @@ namespace WIFIDRIVER
     private:
       const char* ssid = "YE2310D";  
       const char* password = "12345678"; 
+      String user_ssid = "";
+      String user_password = "";
       bool click_scan = false;
       bool click_connect = false;
       ESP8266WebServer server;
       int numNetworks = 0 ;
-      void scanWifi();
+      String htmlStrForWifi = "No Wifi , please Click Scan";
+      String getscanWifistr();
       void OnConnect();
+      void handle_scan();
       void NotFound();
       void Connect2LocalWiFi();
+      void ClickWifiName(String ssid , String password);
       String SendHTML();
   };
 }
