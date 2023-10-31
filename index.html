@@ -36,7 +36,7 @@ input#passwordInput {display: none;width: 200px; height: 40px; font-size: 16px; 
 <script>
     function ClickWifiName(element) {
     var ssid = element.textContent;
-    var passwordInput = document.getElementById("passwordInput");
+    var password = document.getElementById("passwordInput");
     passwordInput.style.display = "block";
     passwordInput.placeholder = ssid+ "-password?";
     // passwordInput.onblur = function () {
