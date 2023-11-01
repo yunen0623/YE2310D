@@ -20,20 +20,23 @@ namespace WIFIDRIVER
   bool wifi_driver::initializeAPWeb()
   {
       WiFi.mode(WIFI_AP);
-      WiFi.softAP(ssid, password);
+      WiFi.softAP(ssid_ap, password_ap);
 
 
       delay(100);
-      server.on("/", [this](){
+      server.on("/", HTTP_GET, [this](){
        OnConnect();
+      //  handleRoot();
       });
 
-      server.on("/scan" , [this](){
+      server.on("/scan" , HTTP_GET, [this](){
         handle_scan();
+        // handleScan();
       });
 
-      server.on("/connect" , [this](){
+      server.on("/connect" , HTTP_GET , [this](){
         Connect2LocalWiFi();
+        // handleConnect();
       });
 
       server.begin();
@@ -43,27 +46,29 @@ namespace WIFIDRIVER
 
   void wifi_driver::Connect2LocalWiFi()
   {
-    if (server.hasArg("ssid") && server.hasArg("password")) 
-    {
-        String ssid_ = server.arg("ssid");
-        String password_ = server.arg("password");
-        
-        user_ssid = ssid_;
-        user_password = password_;
-
-        Serial.print("User ssid: ");
-        Serial.println(user_ssid);
-        Serial.print("User password: ");
-        Serial.println(user_password);
-
-        String page = "Configuration saved. You can close this page now.";
-        server.send(200, "text/html", page);
-    }
+      //點擊後顯示password框
+      if (server.hasArg("ssid") && isConnectbtnClick == false) 
+      {
+        user_ssid = server.arg("ssid");
+        server.send(200, "text/html", SendHTML(true ,true));
+        isConnectbtnClick = true;
+      }
+      //當點擊提交後
+      if (server.hasArg("password") && server.hasArg("ssid") && isConnectbtnClick == true) 
+      {
+        user_ssid = server.arg("ssid");
+        user_password = server.arg("password");
+        Serial.println("SSID : " + user_ssid);
+        Serial.println("Password : " + user_password);
+        WiFi.begin(user_ssid.c_str(), user_password.c_str());
+        server.send(200, "text/html", "connect...");
+        isConnectbtnClick = false;
+      } 
   }
 
   String wifi_driver::getscanWifistr()
   {
-      String wifiList;
+      String wifiList = "";
       int n = WiFi.scanNetworks();
       if (n == 0)
       {
@@ -72,102 +77,88 @@ namespace WIFIDRIVER
       }
       else
       {
-        Serial.print(n);
         Serial.println(" networks found");
         for (int i = 0; i < n; ++i)
         {
-           
+
             String ssid = WiFi.SSID(i);
             int rssi = WiFi.RSSI(i);
-            wifiList += "<li class=\"network-item\" onclick=\"ClickWifiName(this)\">" + ssid + " (RSSI: " + String(rssi) + ")</li>\n";
+            // wifiList += "<li class=\"network-item\" onclick=\"ClickWifiName(this)\">" + ssid + " (RSSI: " + String(rssi) + ")</li>\n";
+            // wifiList += "<li><a class=\"network-item\" href='/connect?ssid=" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + "</a></li>";
+            wifiList += "<li class=\"network-item\"><a href='/connect?ssid=" + ssid + "'>" + ssid + " (RSSI: " + String(rssi) + ")</a></li>\n";
+
         }
       }
-      Serial.println("scan done");
-      Serial.println("");
       return wifiList;
-      
   }
 
   void wifi_driver::handle_scan()
   {
     htmlStrForWifi = getscanWifistr();
-    server.send(200, "text/html", SendHTML());
+    server.send(200, "text/html", SendHTML(true, false));
   }
 
   void wifi_driver::OnConnect() 
   {
-    server.send(200, "text/html", SendHTML()); 
+    server.send(200, "text/html", SendHTML(false , false)); 
   }
 
-  String wifi_driver::SendHTML()
+  String wifi_driver::SendHTML(bool scan_ok  , bool connect_ready)
   {
       String ptr = "<!DOCTYPE html> <html>\n";
       ptr +="<head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0, user-scalable=no\">\n";
       ptr +="<title>YE2310D Config</title>\n";
       ptr +="<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}\n";
-      ptr +="body{margin-top: 50px;display: flex;flex-direction: column;justify-content: center;align-items: center;background-color: #0f3e51;} h1 {color: #858585;margin: 50px auto 30px;} h3 {color: #858585;margin-bottom: 50px;}\n";
-      ptr +=".button {display: block;width: 80px;background-color: #34495e;border: none;color: white;padding: 13px 30px;text-decoration: none;font-size: 18px;margin: 0px auto 35px;cursor: pointer;border-radius: 4px;}\n";
-      ptr +=".button-scan {background-color: #34495e;}\n";
-      ptr +=".button-scan:active {background-color: #16a085;}\n";
-      ptr +=".button-connect {background-color: #34495e;}\n";
-      ptr +=".button-connect:active {background-color: #16a085;}\n";
+      ptr +="body{margin-top: 50px;display: flex;flex-direction: column;justify-content: center;align-items: center;background-color: #04364A;} h1 {color: #DAFFFB;margin: 50px auto 30px;} h3 {color: #DAFFFB;margin-bottom: 50px;}\n";
+      ptr +=".button {display: block;width: 80px;background-color: #176B87;border: none;color: white;padding: 13px 30px;text-decoration: none;font-size: 18px;margin: 0px auto 35px;cursor: pointer;border-radius: 4px;}\n";
+      ptr +=".button-scan {background-color: #176B87;}\n";
+      ptr +=".button-scan:active {background-color: #64CCC5;}\n";
+      ptr +=".button-connect {background-color: #176B87;}\n";
+      ptr +=".button-connect:active {background-color: #64CCC5;}\n";
       ptr +="p {font-size: 14px;color: #888;margin-bottom: 10px;}\n";
-      ptr +=".network-list {width: 300px;max-height: 200px;overflow-y: auto;border: 1px solid #ccc;list-style: none;}\n";
-      ptr +=".network-item:nth-child(even) {background-color: #f2f2f2;}\n";
-      ptr +=".network-item:nth-child(odd) {background-color: #ffffff;}\n";
+      ptr +=".network-list {width: 300px;max-height: 200px;overflow-y: auto;border: none solid #ccc;list-style: none;}\n";
+      ptr +=".network-item:nth-child(even) {background-color: #176B87;}\n";
+      ptr +=".network-item:nth-child(odd) {background-color: #64CCC5;}\n";
       ptr +=".network-item {padding: 10px;border-bottom: 1px solid #ccc;cursor: pointer;}\n";
-      ptr +="input#passwordInput {display: none;width: 200px; height: 40px; font-size: 16px; }\n";
+      ptr +="input[type='submit'] {background-color: #176B87; color: #DAFFFB; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;";
       ptr +="</style>\n";
       ptr +="</head>\n";
       ptr +="<body>\n";
       ptr +="<h1>YE2310D Config</h1>\n";
       ptr +="<h3>Config your WIFI</h3>\n";
 
+      //SCAN 按鈕
       ptr +="<p>SCANWIFI</p><a class=\"button button-scan\" href=\"/scan\">SCAN</a>\n";
       
       //掃描WIFI後顯示
-      ptr +="<p>WIFI LIST</p>\n";
-      ptr +="<ul class=\"network-list\">\n";
-      ptr += htmlStrForWifi;
-      // ptr +="<li class=\"network-item\" onclick=\"ClickWifiName(this)\">Network 1</li>\n";
-      // ptr +="<li class=\"network-item\" onclick=\"ClickWifiName(this)\">Network 2</li>\n";
-      ptr +="</ul>\n";
+      if(scan_ok)
+      {
+        ptr +="<p>WIFI LIST</p>\n";
+        ptr +="<ul class=\"network-list\">\n";
+        ptr += htmlStrForWifi;
+        ptr +="</ul>\n";
+      }
+      
+      //點擊後顯示password框
+      if (scan_ok && connect_ready) 
+      {
+        ptr += "<form method='get' action='/connect'>";
+        ptr += "<label for='password' style='font-size: 20px; color: #DAFFFB;'>Password:</label>";
+        ptr += "<input type='text' name='password' id='password' placeholder='" + user_ssid + " password?' style='font-size: 16px; color: red;'><br>";
+        ptr += "<input type='hidden' name='ssid' value='" + user_ssid + "'>";
+        ptr += "<br><input type='submit' value='connect' style='margin-top: 10px; font-size: 18px; color: #DAFFFB;'>";
+        ptr += "</form>";
+      }
 
-      ptr +="<input type=\"password\" id=\"passwordInput\" style=\"display: none;\">\n";
-      //腳本
-      ptr +="<script>\n";
-      ptr +="function ClickWifiName(element) {\n";
-      ptr +="var ssid = element.textContent;\n";
-      ptr +="var password = document.getElementById(\"passwordInput\");\n";
-      ptr +="passwordInput.style.display = \"block\";\n";
-      ptr +="passwordInput.placeholder = ssid+ \"-password?\";\n";
-      // ptr +="passwordInput.onblur = function () {\n";
-      // ptr +="passwordInput.style.display = \"none\"; \n";
-      // ptr +=" passwordInput.value = "";\n";
-      // ptr +="};\n";
-      ptr +="}\n";
-      ptr +="</script>\n";
-
-      ptr +="<p>CONNECT</p><a class=\"button button-connect\" href=\"/connect\">CONNECT</a>\n";
       ptr +="</body>\n";
       ptr +="</html>\n";
       return ptr;
-  }
-
-  void wifi_driver::ClickWifiName(String ssid , String password)
-  {
-    user_ssid = ssid;
-    user_password = password;
-  }
-
-  void wifi_driver::NotFound()
-  {
-      server.send(404, "text/plain", "Not found");
   }
 
   void wifi_driver::start()
   {
       server.handleClient();
   }
+
 
 }
