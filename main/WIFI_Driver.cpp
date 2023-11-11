@@ -12,17 +12,106 @@ namespace WIFIDRIVER
     
   }
 
-  void wifi_driver::switchMode()
+  bool wifi_driver::get_connect_statu()
   {
+    return isConnectSTA_;
+  }
+  
+  ///搜尋SPIFFS中的JSON 存不存在SSID PASS
+  ///不存在or附近無相同SSID 則開啟AP mode 建立WEB
+  ///存在的話直接STA MDOE連線
+  ///切換到STA1並連線後return true
+  void wifi_driver::initialize()
+  {
+    Serial.println("初始化");
+    bool isReadOK = readJsonFromSPIFFS();
+    int n = WiFi.scanNetworks();
+    if(n != 0 && isReadOK == true)
+    { 
+      for (int i = 0; i < n; ++i)
+      {
+          String ssid = WiFi.SSID(i);
+          if(ssid == SPIFFS_ssid)
+          {
+            Serial.println("初始化中找到配對的SSID");
+            isAPMode = false;
+            //切換為STA模式
+            switchMode(isAPMode);
+            break;   
+          }
+      }      
+    }
+    else
+    {
+      // 切換到AP模式
+      Serial.println("初始化未找到 切換為AP模式");
+      isAPMode = true;
+      initializeAPWeb();
+      while(1)
+      {
+        startAPWeb();
+        if(isWritetoSPIFFSOK)
+        {
+           Serial.println("初始化While Loop ,isWritetoSPIFFSOK 設定OK");
+          if(user_ssid != "" && user_ssid != "")
+          {
+            Serial.println("初始化While Loop , userSSID PASS != NULL");
+            break;
+          }
+          else
+            Serial.println("JSON parameter is Null");
+        }
+      }
+      //設定完成後 遞規自己 切換成STA並重新嘗試連線 
+      initialize();
+    }
+  }
 
+
+  void wifi_driver::switchMode(bool isAP)
+  {
+    if(isAP == true) //AP
+    {
+      Serial.println("切換模式中 , AP 模式");
+      WiFi.mode(WIFI_AP);
+      WiFi.softAP(ssid_ap, password_ap);
+      isConnectSTA_ = false;
+    }
+    else //STA
+    {
+      Serial.println("切換模式中 , STA 模式");
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(SPIFFS_ssid, SPIFFS_password , 15);
+      int connectionAttempts = 0;
+      while (WiFi.status() != WL_CONNECTED) 
+      {
+        delay(1000);
+        Serial.println("Connecting to WiFi...");
+        connectionAttempts++;
+        if (connectionAttempts >= 15) 
+        {
+           Serial.println("Connection timed out");
+           isConnectSTA_ = false;
+            break;
+        }
+      }
+
+      if (WiFi.status() == WL_CONNECTED) 
+      {
+        Serial.println("Connected to WiFi");
+        isConnectSTA_ = true;
+      } 
+      else //連線超時
+      { //遞歸自己 並開啟AP
+        Serial.println("連線超時 , 開始AP");
+        switchMode(true);
+      }
+    }
   }
 
   bool wifi_driver::initializeAPWeb()
   {
-      WiFi.mode(WIFI_AP);
-      WiFi.softAP(ssid_ap, password_ap);
-
-
+      switchMode(isAPMode);
       delay(100);
       server.on("/", HTTP_GET, [this](){
        OnConnect();
@@ -60,8 +149,9 @@ namespace WIFIDRIVER
         user_password = server.arg("password");
         Serial.println("SSID : " + user_ssid);
         Serial.println("Password : " + user_password);
-        WiFi.begin(user_ssid.c_str(), user_password.c_str());
         server.send(200, "text/html", "connect...");
+        //將資料寫入JSON當中
+        isWritetoSPIFFSOK = writeJsonToSPIFFS();
         isConnectbtnClick = false;
       } 
   }
@@ -155,9 +245,105 @@ namespace WIFIDRIVER
       return ptr;
   }
 
-  void wifi_driver::start()
+  void wifi_driver::startAPWeb()
   {
       server.handleClient();
+  }
+
+  bool wifi_driver::readJsonFromSPIFFS()
+  {
+    //init SPIFFS
+    if (!SPIFFS.begin()) 
+    {
+      Serial.println("SPIFFS 初始化失敗!");
+      return false;
+    }
+    else
+      Serial.println("SPIFFS 初始化成功!"); 
+    //"r"（只讀）、"w"（只寫）、"a"（附加，如果文件不存在則創建）、"r+"（讀寫，如果文件不存在則失敗）
+    jsonFile = SPIFFS.open("/config.json", "r+");
+    if (!jsonFile) 
+    {
+      Serial.println("開啟JSON失敗");
+      return false;
+    }
+    else
+      Serial.println("開啟JSON成功");
+
+    //read JSON ssid and password
+    
+    DynamicJsonDocument doc(200);
+    DeserializationError error = deserializeJson(doc, jsonFile);
+    if (error) 
+    {
+      Serial.println("JSON轉換失敗");
+      jsonFile.close();
+      return false;
+    }
+    else
+      Serial.println("JSON轉換成功");
+    SPIFFS_ssid = doc["user_ssid"].as<String>();
+    SPIFFS_password = doc["user_password"].as<String>();
+
+    if(SPIFFS_ssid != "" && SPIFFS_password != "")
+    {
+      Serial.println("JSON中數據正確");
+      jsonFile.close();
+      return true;      
+    }
+    else
+    {
+      Serial.println("JSON中數據錯誤");
+      jsonFile.close();
+      return false;
+    }
+  }
+
+  bool wifi_driver::writeJsonToSPIFFS()
+  {
+    //init SPIFFS
+    if (!SPIFFS.begin()) 
+    {
+      Serial.println("SPIFFS initialization failed!");
+      return false;
+    }
+    //"r"（只讀）、"w"（只寫）、"a"（附加，如果文件不存在則創建）、"r+"（讀寫，如果文件不存在則失敗）
+    jsonFile = SPIFFS.open("/config.json", "r+");
+    if (!jsonFile) 
+    {
+      Serial.println("Failed to open JSON file");
+      return false;
+    }
+    // 2是字段數，40是JSON數據大致估算的容量
+    const size_t capacity = JSON_OBJECT_SIZE(2) + 40;
+    DynamicJsonDocument doc(capacity);
+
+    DeserializationError error = deserializeJson(doc, jsonFile);
+    if (error) 
+    {
+      Serial.println("Failed to parse JSON");
+      jsonFile.close();
+      return false;
+    }
+    //寫新資料
+    doc["user_ssid"] = user_ssid;
+    doc["user_password"] = user_password;
+
+    // 將文件指針移到文件的開頭
+    jsonFile.seek(0);
+
+    // 將JSON數據寫入文件
+    if (serializeJson(doc, jsonFile) == 0) 
+    {
+      Serial.println("Failed to write JSON to file");
+      jsonFile.close();
+      return false;
+    }
+    else
+    { 
+      jsonFile.close();
+      return true;
+    }
   }
 
 

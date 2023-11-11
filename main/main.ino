@@ -1,27 +1,21 @@
-#include <FastLED.h>
 #include "WIFI_Driver.h"
-#define LED_PIN1 12
-#define LED_PIN2 13
-#define NUM_LEDS 64
-CRGB leds[NUM_LEDS];
-WIFIDRIVER::wifi_driver wifi_manager;
-
+#include "WS2812BMatrix_Driver.h"
+#include "WIFI_Func.h"
+WiFiUDP ntpUDP;
+WIFIDRIVER::wifi_driver* wifi_manager = new WIFIDRIVER::wifi_driver() ;
+MATRIXDISPLAY::display_driver* display_manager = new MATRIXDISPLAY::display_driver();
+WIFI_FUNC::WIFI_function* wifi_func = new WIFI_FUNC::WIFI_function();
 void setup() {
   Serial.begin(115200);
-  wifi_manager.initializeAPWeb();
-  // put your setup code here, to run once:
-  // FastLED.addLeds<WS2812, LED_PIN1, GRB>(leds, NUM_LEDS);
-  // FastLED.addLeds<WS2812, LED_PIN2, GRB>(leds, NUM_LEDS);
+  wifi_manager->initialize();
+  display_manager->initialize();
+  wifi_func->initialize();
 }
 
-void loop() {
-  wifi_manager.start();
-  // wifi_manager.scanWifi();
-  // for(int hue = 0; hue < 255; hue += 1) {
-  //   for(int i = 0; i < NUM_LEDS; i++) {
-  //     leds[i] = CHSV(hue, 128, 255);
-  //   }
-  //   // FastLED.show();
-  //   delay(10);
-  // }
+void loop() {  
+String currentTime = wifi_func->getTime();
+int hours = wifi_func->getTimehours();
+int minutes = wifi_func->getTimeminutes();
+display_manager->showTimeOnMatrix(hours , minutes);
+delay(1000);
 }
